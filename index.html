@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentLens — Çok ajanlı sistemler için hata merceği</title>
+<meta name="description" content="AgentLens, LLM tabanlı çok ajanlı sistemlerin ajanlar arası iletişim katmanındaki başarısızlıkları otomatik tespit eder, MAST taksonomisine göre sınıflandırır ve hatanın hangi adımda neden oluştuğunu açıklar. TOBB ETÜ BİL/YAP 495 bitirme projesi.">
+<meta name="theme-color" content="#0B0A09">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="AgentLens — Çok ajanlı sistemler için hata merceği">
+<meta property="og:description" content="Ajanlar arası iletişim hatalarını tespit eden, sınıflandıran ve açıklayan LLM tabanlı analiz aracı.">
+<meta property="og:locale" content="tr_TR">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='11' fill='none' stroke='%23F0A93E' stroke-width='2.5'/><circle cx='16' cy='16' r='4' fill='%23F0A93E'/></svg>">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<!--
+  ══════════════════════════════════════════════════════════════
+  DÜZENLENECEK YERLER (hepsi "TODO" ile işaretli)
+   1) Rapor bağlantıları  → #reports bölümü, her karttaki PDF/DOCX href
+   2) Takım üyeleri       → #team bölümü: foto, bio, LinkedIn
+   3) GitHub deposu       → #contact bölümü ve nav
+   4) Takım e-postası     → #contact bölümü
+  Fotoğraflar: assets/team/ klasörüne koyup ilgili yorumdaki <img>
+  satırını açman yeterli.
+  ══════════════════════════════════════════════════════════════
+-->
+
+<a class="skip" href="#main">İçeriğe geç</a>
+
+<canvas id="trace" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+
+<header class="nav" id="nav">
+  <div class="nav__in">
+    <a class="brand" href="#top" aria-label="AgentLens ana sayfa">
+      <span class="lens" aria-hidden="true"></span>
+      <span class="brand__name">AgentLens</span>
+    </a>
+    <nav class="nav__links" aria-label="Site içi gezinme">
+      <a href="#problem">Problem</a>
+      <a href="#how">Nasıl çalışır</a>
+      <a href="#demo">Demo</a>
+      <a href="#reports">Raporlar</a>
+      <a href="#team">Takım</a>
+    </nav>
+    <a class="btn btn--sm" href="#demo">Demoyu gör <span aria-hidden="true">→</span></a>
+    <button class="burger" id="burger" aria-label="Menüyü aç" aria-expanded="false" aria-controls="mobileMenu">
+      <span></span><span></span>
+    </button>
+  </div>
+  <div class="mobilemenu" id="mobileMenu" hidden>
+    <a href="#problem">Problem</a>
+    <a href="#how">Nasıl çalışır</a>
+    <a href="#demo">Demo</a>
+    <a href="#taxonomy">Taksonomi</a>
+    <a href="#reports">Raporlar</a>
+    <a href="#team">Takım</a>
+    <a href="#contact">İletişim</a>
+  </div>
+</header>
+
+<main id="main">
+<span id="top"></span>
+
+<!-- ───────────────────────── HERO ───────────────────────── -->
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow reveal">TOBB ETÜ · Bilgisayar / Yapay Zekâ Mühendisliği · BİL 495 — YAP 495 · 2025–2026 Yaz</p>
+    <h1 class="hero__h reveal">Çok ajanlı sistemler<br>için <em>hata merceği.</em></h1>
+    <p class="hero__lede reveal">AgentLens, LLM tabanlı çok ajanlı sistemlerin ajanlar arası konuşma akışını izler; iletişim ve koordinasyon kaynaklı başarısızlıkları otomatik tespit eder, MAST taksonomisine göre sınıflandırır ve hatanın <strong>hangi adımda</strong>, <strong>hangi ajanlar arasında</strong> ve <strong>neden</strong> oluştuğunu açıklar.</p>
+    <div class="hero__cta reveal">
+      <a class="btn" href="#demo">Arayüzü incele <span aria-hidden="true">→</span></a>
+      <a class="btn btn--ghost" href="#reports">Raporları oku</a>
+    </div>
+
+    <div class="hero__strip reveal" role="list">
+      <div class="hstat" role="listitem"><span class="hstat__n">%41–87</span><span class="hstat__l">Çok ajanlı sistemlerde gözlenen başarısızlık aralığı</span></div>
+      <div class="hstat" role="listitem"><span class="hstat__n">14</span><span class="hstat__l">MAST taksonomisindeki hata modu</span></div>
+      <div class="hstat" role="listitem"><span class="hstat__n">&lt; 10 sn</span><span class="hstat__l">Bir oturumun uçtan uca analiz hedefi</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── PROBLEM ───────────────────────── -->
+<section id="problem" class="sec">
+  <div class="wrap">
+    <div class="sechead reveal">
+      <p class="tag">//01 &nbsp;Problem</p>
+      <h2 class="h2">Ajanlar tek tek çalışıyor. Aralarındaki hat kopuyor.</h2>
+      <p class="lede">Karmaşık görevler için birden fazla dil modelinin birlikte çalıştığı sistemler yaygınlaştı. Ancak literatürdeki en kapsamlı ampirik çalışma, başarısızlıkların büyük bölümünün ajanların bireysel yetersizliğinden değil, görev devretme ve bağlam aktarma yaptıkları <strong>iletişim katmanından</strong> geldiğini gösteriyor.</p>
+    </div>
+
+    <div class="fcgrid">
+      <article class="fc reveal">
+        <p class="fc__pct">%44,2</p>
+        <h3 class="fc__h">Sistem tasarımı hataları <span class="code">FC1</span></h3>
+        <p class="fc__p">Mimari kararlar, eksik rol tanımları ve hatalı durum yönetiminden doğan başarısızlıklar.</p>
+      </article>
+      <article class="fc fc--lit reveal">
+        <p class="fc__pct">%32,3</p>
+        <h3 class="fc__h">Ajanlar arası hizalanma <span class="code">FC2</span></h3>
+        <p class="fc__p">İletişim kopuklukları ve koordinasyon eksiklikleri. AgentLens'in birincil odağı bu katman.</p>
+      </article>
+      <article class="fc reveal">
+        <p class="fc__pct">%23,5</p>
+        <h3 class="fc__h">Görev doğrulama <span class="code">FC3</span></h3>
+        <p class="fc__p">Kalite kontrol süreçlerinin eksik kalması veya yanlış çalışması.</p>
+      </article>
+    </div>
+
+    <div class="split reveal">
+      <div class="split__box">
+        <p class="tag">Bilgi dağıldığında ne oluyor</p>
+        <div class="gap">
+          <div class="gap__row">
+            <span class="gap__lab">Tam bilgiye sahip tek ajan</span>
+            <span class="gap__track"><span class="gap__fill" style="--w:80.7%"></span></span>
+            <span class="gap__val">%80,7</span>
+          </div>
+          <div class="gap__row gap__row--bad">
+            <span class="gap__lab">Aynı bilgi ajanlara bölündüğünde</span>
+            <span class="gap__track"><span class="gap__fill" style="--w:30.1%"></span></span>
+            <span class="gap__val">%30,1</span>
+          </div>
+        </div>
+        <p class="fine">HIDDEN-BENCH sonuçları (Li ve ark., 2026). Kayıp, model büyütülerek kapanmıyor; sorun yapısal.</p>
+      </div>
+      <div class="split__box">
+        <p class="tag">Mevcut araçların bıraktığı boşluk</p>
+        <ul class="ticks">
+          <li>Kayıt tutuyorlar, ancak <strong>hangi adımda</strong> ne tür bir uyuşmazlık olduğunu söylemiyorlar.</li>
+          <li>Hata türünü taksonomiye oturtmuyor, sınıflandırma yapmıyorlar.</li>
+          <li>Geliştirici, sorunu bulmak için ham logları elle taramak zorunda kalıyor.</li>
+        </ul>
+        <p class="fine">AgentLens tam olarak bu üç boşluğu kapatmak için tasarlandı.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── NASIL ÇALIŞIR ───────────────────────── -->
+<section id="how" class="sec sec--alt">
+  <div class="wrap">
+    <div class="sechead reveal">
+      <p class="tag">//02 &nbsp;Çözüm</p>
+      <h2 class="h2">İki aşamalı bir mercek: önce ele, sonra büyüt.</h2>
+      <p class="lede">Her konuşma adımında büyük bir modeli çalıştırmak pahalı; yalnızca küçük bir sınıflandırıcı kullanmak ise açıklama üretemiyor. AgentLens ikisini ayırır: ucuz ve yüksek yakalamalı bir ön eleme, ardından yalnızca şüpheli pencereler için ayrıntılı analiz.</p>
+    </div>
+
+    <ol class="pipe">
+      <li class="pipe__i reveal">
+        <p class="pipe__n">//01</p>
+        <h3 class="pipe__h">Data Collector</h3>
+        <p class="pipe__p">İzlenen sistemin log akışından ajan mesajlarını ve metadata'yı yakalar: gönderen, alıcı, tur sırası, zaman damgası, araç çağrısı, görev bağlamı.</p>
+      </li>
+      <li class="pipe__i reveal">
+        <p class="pipe__n">//02</p>
+        <h3 class="pipe__h">Raw Trace Storage</h3>
+        <p class="pipe__p">Ham izler değiştirilmeden, yalnızca ekleme yapılan biçimde saklanır. Hattın herhangi bir adımı hata verirse analiz baştan çalıştırılabilir.</p>
+      </li>
+      <li class="pipe__i reveal">
+        <p class="pipe__n">//03</p>
+        <h3 class="pipe__h">Data Formatter</h3>
+        <p class="pipe__p">Farklı çerçevelerden gelen farklı loglar tek bir JSON konuşma şemasına indirgenir. Şema doğrulaması ve kişisel veri takma adlandırması bu katmanda çalışır.</p>
+      </li>
+      <li class="pipe__i reveal">
+        <p class="pipe__n">//04</p>
+        <h3 class="pipe__h">Conversation Window Builder</h3>
+        <p class="pipe__p">Güncel mesajı birikmiş konuşma geçmişiyle birleştirir. Uyuşmazlık ancak bağlam içinde anlam kazandığı için analiz birimi tek mesaj değil, pencere.</p>
+      </li>
+      <li class="pipe__i pipe__i--key reveal">
+        <p class="pipe__n">//05</p>
+        <h3 class="pipe__h">Stage 1 — Anomali tespiti</h3>
+        <p class="pipe__p">Few-shot istemlerle normal / şüpheli ikili sınıflandırması ve bir anomali skoru üretir. Yüksek yakalama (recall) önceliğiyle çalışır: kaçırılan hata, yanlış alarmdan pahalıdır.</p>
+      </li>
+      <li class="pipe__i pipe__i--key reveal">
+        <p class="pipe__n">//06</p>
+        <h3 class="pipe__h">Stage 2 — Hata analizi</h3>
+        <p class="pipe__p">Yalnızca şüpheli pencereler için çalışır. MAST Store'dan o vakaya anlamsal olarak en yakın örnekleri embedding tabanlı arama ile çeker, istemine ekler ve hata türünü, başlangıç adımını, ilgili ajanları belirler.</p>
+      </li>
+      <li class="pipe__i reveal">
+        <p class="pipe__n">//07</p>
+        <h3 class="pipe__h">Report Generator</h3>
+        <p class="pipe__p">Analizi hem insanın okuyabileceği hem başka sistemlerin işleyebileceği yapılandırılmış bir rapora dönüştürür.</p>
+      </li>
+      <li class="pipe__i reveal">
+        <p class="pipe__n">//08</p>
+        <h3 class="pipe__h">Dashboard / Logs</h3>
+        <p class="pipe__p">Normal akış da, hatalı akış da görünür. Yanlış negatiflerin incelenebilmesi ve model başarımının ölçülebilmesi buna bağlı.</p>
+      </li>
+    </ol>
+
+    <div class="props">
+      <div class="prop reveal">
+        <p class="tag">Müdahalesiz</p>
+        <p>Sistem ajanların iç işleyişine dokunmaz, log kayıtları üzerinden çalışır. İzlenen sistemi değiştirmeden dışarıdan bağlanır.</p>
+      </div>
+      <div class="prop reveal">
+        <p class="tag">Modüler</p>
+        <p>Her bileşenin tek sorumluluğu ve tanımlı bir arayüzü var. Biri değiştiğinde diğerleri etkilenmez.</p>
+      </div>
+      <div class="prop reveal">
+        <p class="tag">Gizliliği gözeten</p>
+        <p>Harici model çağrılarından önce kişisel veri takma adlandırılır. Maskeleme hata verirse pencere maskesiz gönderilmez, işlenmeden bırakılır.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── DEMO ───────────────────────── -->
+<section id="demo" class="sec">
+  <div class="wrap">
+    <div class="sechead reveal">
+      <p class="tag">//03 &nbsp;Arayüz</p>
+      <h2 class="h2">Genelden özele: sistemden konuşmaya, konuşmadan adıma.</h2>
+      <p class="lede">Aşağıdaki ekranlar, projenin tasarım aşamasında hazırlanan etkileşimli arayüz taslağıdır. Sekmelere tıklayarak akışı gezebilirsiniz.</p>
+    </div>
+
+    <div class="demo reveal">
+      <div class="demo__tabs" role="tablist" aria-label="Arayüz ekranları">
+        <button class="dtab is-on" role="tab" aria-selected="true" data-s="home">01 · Sistemlerim</button>
+        <button class="dtab" role="tab" aria-selected="false" data-s="add">02 · Sistem ekle</button>
+        <button class="dtab" role="tab" aria-selected="false" data-s="overview">03 · Konuşmalar</button>
+        <button class="dtab" role="tab" aria-selected="false" data-s="agents">04 · Ajanlar</button>
+        <button class="dtab" role="tab" aria-selected="false" data-s="detail">05 · Konuşma detayı</button>
+        <button class="dtab" role="tab" aria-selected="false" data-s="perf">06 · Model başarımı</button>
+      </div>
+
+      <div class="demo__frame">
+        <div class="chrome"><span class="chrome__d"></span><span class="chrome__d"></span><span class="chrome__d"></span><span class="chrome__url">agentlens.app</span></div>
+
+        <!-- 01 -->
+        <div class="scr is-on" id="s-home" role="tabpanel">
+          <div class="app">
+            <aside class="side">
+              <div class="side__brand"><span class="lens lens--sm"></span> AgentLens</div>
+              <a class="is-on" data-go="home">Sistemlerim</a>
+              <a data-go="perf">Model başarımı</a>
+              <p class="side__sec">Hesap</p>
+              <a>Ayarlar</a><a>Yardım</a>
+            </aside>
+            <div class="scr__main">
+              <div class="between">
+                <div><h4 class="scr__h">Sistemlerim</h4><p class="scr__sub">İzlenen çok ajanlı sistemler</p></div>
+                <button class="ui-btn" data-go="add">+ Yeni sistem</button>
+              </div>
+              <div class="ucards">
+                <button class="ucard" data-go="overview">
+                  <h5>research-crew</h5>
+                  <span class="pill pill--ok"><i></i>Sağlıklı</span> <span class="fine">4 ajan</span>
+                  <div class="ucard__meta"><span>128 konuşma</span><span>%12 şüpheli</span></div>
+                </button>
+                <button class="ucard" data-go="overview">
+                  <h5>code-review-bot</h5>
+                  <span class="pill pill--warn"><i></i>Dikkat</span> <span class="fine">3 ajan</span>
+                  <div class="ucard__meta"><span>73 konuşma</span><span>%31 şüpheli</span></div>
+                </button>
+                <button class="ucard ucard--add" data-go="add">+ Sistem ekle</button>
+              </div>
+              <p class="scr__note">Her kart o sistemin genel görünümüne açılır; kartta sağlık göstergesi olarak şüpheli konuşma oranı yer alır.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 02 -->
+        <div class="scr" id="s-add" role="tabpanel">
+          <div class="app">
+            <aside class="side">
+              <div class="side__brand"><span class="lens lens--sm"></span> AgentLens</div>
+              <a class="is-on" data-go="home">Sistemlerim</a>
+              <a data-go="perf">Model başarımı</a>
+            </aside>
+            <div class="scr__main">
+              <p class="crumb"><a data-go="home">Sistemlerim</a> / Yeni sistem</p>
+              <h4 class="scr__h">Yeni sistem ekle</h4>
+              <p class="scr__sub">Bir izleme yöntemi seç</p>
+              <div class="utabs">
+                <button class="utab is-on" data-t="live">Canlı entegrasyon</button>
+                <button class="utab" data-t="upload">Kayıt yükle</button>
+                <button class="utab" data-t="testset">Etiketli test kümesi</button>
+              </div>
+              <div class="upane is-on" id="t-live">
+                <p class="fine">Bu kodu kendi çok ajanlı sisteminin başına ekle. AgentLens ajan mesajlarını log üzerinden dinlemeye başlar; sistemine müdahale etmez.</p>
+                <pre class="codeblk"><span class="c"># pip install agentlens</span>
+<span class="k">from</span> agentlens <span class="k">import</span> Monitor
+
+monitor = Monitor(api_key=<span class="s">"al_****"</span>)
+monitor.attach(system=<span class="s">"my-agents"</span>)</pre>
+                <div class="row"><button class="ui-btn ui-btn--ghost">Kodu kopyala</button><button class="ui-btn" data-go="overview">Bağlantıyı test et →</button></div>
+              </div>
+              <div class="upane" id="t-upload">
+                <div class="drop">Konuşma kaydını buraya sürükle<span class="fine">.json / .jsonl — dışa aktarılmış ajan konuşmaları</span><button class="ui-btn ui-btn--ghost">Dosya seç</button></div>
+                <div class="row row--end"><button class="ui-btn" data-go="overview">Yükle ve analiz et →</button></div>
+              </div>
+              <div class="upane" id="t-testset">
+                <p class="fine">Etiketli sentetik veya gerçek test konuşmalarını yükle. Sistem tahminleri etiketlerle karşılaştırır ve model başarımı ekranında precision / recall / F1 üretir.</p>
+                <div class="drop">Etiketli veri kümesini sürükle<span class="fine">her kayıt bir <code>label</code> alanı içermeli</span><button class="ui-btn ui-btn--ghost">Dosya seç</button></div>
+                <div class="row row--end"><button class="ui-btn" data-go="perf">Değerlendirmeyi başlat →</button></div>
+              </div>
+              <p class="scr__note">Canlı yol müdahalesiz izlemeyi, yükleme yolu ise çevrim dışı analizi karşılar.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 03 -->
+        <div class="scr" id="s-overview" role="tabpanel">
+          <div class="app">
+            <aside class="side">
+              <div class="side__brand"><span class="lens lens--sm"></span> AgentLens</div>
+              <a class="is-on" data-go="home">Sistemlerim</a>
+              <a data-go="perf">Model başarımı</a>
+            </aside>
+            <div class="scr__main">
+              <p class="crumb"><a data-go="home">Sistemlerim</a> / research-crew</p>
+              <div class="between">
+                <div><h4 class="scr__h">research-crew</h4><p class="scr__sub">4 ajan · son eşitleme 2 dk önce</p></div>
+                <span class="pill pill--ok"><i></i>Sağlıklı</span>
+              </div>
+              <div class="ustats">
+                <div class="ustat"><b>128</b><span>Toplam konuşma</span></div>
+                <div class="ustat"><b>113</b><span>Normal</span></div>
+                <div class="ustat"><b>15</b><span>Şüpheli</span></div>
+                <div class="ustat"><b>%12</b><span>Şüpheli oranı</span></div>
+              </div>
+              <div class="utabs">
+                <button class="utab is-on" data-go="overview">Konuşmalar</button>
+                <button class="utab" data-go="agents">Ajanlar</button>
+              </div>
+              <div class="alert"><span class="alert__i">!</span> 3 konuşmada zorunlu alan eksik: gönderen / alıcı / zaman damgası. <a>İncele →</a></div>
+              <div class="chips"><span class="chip is-on">Tümü</span><span class="chip">Şüpheli</span><span class="chip">Normal</span><span class="chip">Hata türü ▾</span></div>
+              <div class="tblwrap">
+              <table class="tbl">
+                <thead><tr><th>Konuşma</th><th>Ajanlar</th><th>Durum</th><th>Sebep</th><th>Skor</th><th>Saat</th></tr></thead>
+                <tbody>
+                  <tr data-go="detail"><td>#4821</td><td>Planner ↔ Coder</td><td><span class="pill pill--warn"><i></i>Şüpheli</span></td><td class="fine">Adım tekrarı — aynı alt görev 3 kez</td><td>0,86</td><td class="fine">14:02</td></tr>
+                  <tr data-go="detail"><td>#4820</td><td>Coder ↔ Tester</td><td><span class="pill pill--ok"><i></i>Normal</span></td><td class="fine">—</td><td>0,11</td><td class="fine">13:58</td></tr>
+                  <tr data-go="detail"><td>#4819</td><td>Planner ↔ Tester</td><td><span class="pill pill--warn"><i></i>Şüpheli</span></td><td class="fine">Akıl yürütme–eylem uyuşmazlığı</td><td>0,79</td><td class="fine">13:51</td></tr>
+                  <tr data-go="detail"><td>#4818</td><td>Coder ↔ Planner</td><td><span class="pill pill--ok"><i></i>Normal</span></td><td class="fine">—</td><td>0,09</td><td class="fine">13:40</td></tr>
+                  <tr data-go="detail"><td>#4817</td><td>Tester ↔ Coder</td><td><span class="pill pill--ok"><i></i>Normal</span></td><td class="fine">—</td><td>0,18</td><td class="fine">13:33</td></tr>
+                </tbody>
+              </table>
+              </div>
+              <p class="scr__note">Liste özet kalır; hata türü, kanıt ve tam açıklama satıra tıklandığında açılır.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 04 -->
+        <div class="scr" id="s-agents" role="tabpanel">
+          <div class="app">
+            <aside class="side">
+              <div class="side__brand"><span class="lens lens--sm"></span> AgentLens</div>
+              <a class="is-on" data-go="home">Sistemlerim</a>
+              <a data-go="perf">Model başarımı</a>
+            </aside>
+            <div class="scr__main">
+              <p class="crumb"><a data-go="home">Sistemlerim</a> / research-crew</p>
+              <h4 class="scr__h">research-crew</h4>
+              <p class="scr__sub">4 ajan</p>
+              <div class="utabs">
+                <button class="utab" data-go="overview">Konuşmalar</button>
+                <button class="utab is-on" data-go="agents">Ajanlar</button>
+              </div>
+              <div class="tblwrap">
+              <table class="tbl">
+                <thead><tr><th>Ajan</th><th>Rol</th><th>Konuşma</th><th>Karıştığı şüpheli</th><th>En sık hata</th></tr></thead>
+                <tbody>
+                  <tr><td>Planner</td><td class="fine">Görev ayrıştırma</td><td>96</td><td>9</td><td class="fine">Adım tekrarı</td></tr>
+                  <tr><td>Coder</td><td class="fine">Uygulama</td><td>104</td><td>11</td><td class="fine">Akıl yürütme–eylem</td></tr>
+                  <tr><td>Tester</td><td class="fine">Doğrulama</td><td>71</td><td>4</td><td class="fine">Eksik doğrulama</td></tr>
+                  <tr><td>Reviewer</td><td class="fine">Son onay</td><td>52</td><td>2</td><td class="fine">Erken sonlandırma</td></tr>
+                </tbody>
+              </table>
+              </div>
+              <p class="scr__note">Bu görünüm "hangi ajan sık hata üretiyor" sorusuna yardımcı olur; analiz birimi yine de konuşmadır.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 05 -->
+        <div class="scr" id="s-detail" role="tabpanel">
+          <div class="app">
+            <aside class="side">
+              <div class="side__brand"><span class="lens lens--sm"></span> AgentLens</div>
+              <a class="is-on" data-go="home">Sistemlerim</a>
+              <a data-go="perf">Model başarımı</a>
+            </aside>
+            <div class="scr__main">
+              <p class="crumb"><a data-go="home">Sistemlerim</a> / <a data-go="overview">research-crew</a> / #4821</p>
+              <div class="between">
+                <div><h4 class="scr__h">Konuşma #4821</h4><p class="scr__sub">Planner ↔ Coder · 8 tur · 14:02</p></div>
+                <span class="pill pill--warn"><i></i>Şüpheli · 0,86</span>
+              </div>
+              <div class="detail">
+                <div class="trace">
+                  <div class="msg"><span class="msg__who">Planner<br>tur 1</span><div class="bub"><span class="bub__s">Adım 1</span><i class="ph"></i><i class="ph ph--s"></i></div></div>
+                  <div class="msg"><span class="msg__who">Coder<br>tur 2</span><div class="bub"><span class="bub__s">Adım 2</span><i class="ph"></i><i class="ph ph--s"></i></div></div>
+                  <div class="msg"><span class="msg__who">Planner<br>tur 3</span><div class="bub"><span class="bub__s">Adım 3</span><i class="ph"></i></div></div>
+                  <div class="msg msg--bad"><span class="msg__who">Coder<br>tur 4</span><div class="bub"><span class="bub__s">Adım 4 · tespit noktası</span><i class="ph"></i><i class="ph ph--s"></i><span class="flag">⚑ Adım tekrarı burada başlıyor</span></div></div>
+                  <div class="msg"><span class="msg__who">Planner<br>tur 5</span><div class="bub"><span class="bub__s">Adım 5</span><i class="ph"></i><i class="ph ph--s"></i></div></div>
+                </div>
+                <div class="rep">
+                  <p class="rep__h">Hata raporu</p>
+                  <div class="kv"><span class="kv__k">Hata türü</span><span class="kv__v">Adım tekrarı <span class="code">FM-1.3</span></span></div>
+                  <div class="kv"><span class="kv__k">Kategori</span><span class="kv__v">Sistem tasarımı <span class="code">FC1</span></span></div>
+                  <div class="kv"><span class="kv__k">Başladığı adım</span><span class="kv__v">Tur 4</span></div>
+                  <div class="kv"><span class="kv__k">İlgili ajanlar</span><span class="kv__v">Planner, Coder</span></div>
+                  <div class="kv"><span class="kv__k">Anomali skoru</span><span class="kv__v">0,86</span></div>
+                  <div class="kv"><span class="kv__k">Açıklama</span><p class="expl">Coder, önceki turda tamamlanan alt görevi yeni bir görevmiş gibi tekrar ele aldı; Planner bunu durdurmadığı için aynı adım döngüye girdi.</p></div>
+                  <button class="ui-btn ui-btn--ghost ui-btn--full">Raporu JSON indir</button>
+                </div>
+              </div>
+              <p class="scr__note">Projenin en ayırt edici çıktısı bu ekran: vurgulanan baloncuk ile rapordaki "başladığı adım" birbirini işaret eder.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 06 -->
+        <div class="scr" id="s-perf" role="tabpanel">
+          <div class="app">
+            <aside class="side">
+              <div class="side__brand"><span class="lens lens--sm"></span> AgentLens</div>
+              <a data-go="home">Sistemlerim</a>
+              <a class="is-on" data-go="perf">Model başarımı</a>
+            </aside>
+            <div class="scr__main">
+              <h4 class="scr__h">Model başarımı</h4>
+              <p class="scr__sub">MAST test kümesi üzerinde değerlendirme</p>
+              <div class="ustats">
+                <div class="ustat"><b>0,83</b><span>F1-skoru</span></div>
+                <div class="ustat"><b>0,88</b><span>Recall</span></div>
+                <div class="ustat"><b>0,79</b><span>Precision</span></div>
+                <div class="ustat"><b>%77</b><span>Sınıflandırma doğr.</span></div>
+              </div>
+              <div class="perfrow">
+                <div>
+                  <p class="tag tag--sm">Karışıklık matrisi</p>
+                  <div class="cm">
+                    <span class="cm__hd"></span><span class="cm__hd">Tahmin: normal</span><span class="cm__hd">Tahmin: şüpheli</span>
+                    <span class="cm__hd">Gerçek: normal</span><span class="cm__c cm__c--d">412</span><span class="cm__c">38</span>
+                    <span class="cm__hd">Gerçek: şüpheli</span><span class="cm__c">21</span><span class="cm__c cm__c--d">159</span>
+                  </div>
+                </div>
+                <div class="perfrow__bars">
+                  <p class="tag tag--sm">Hata türü dağılımı</p>
+                  <div class="ubar"><span class="ubar__l">Adım tekrarı</span><span class="ubar__t"><i style="width:80%"></i></span></div>
+                  <div class="ubar"><span class="ubar__l">Akıl yürütme–eylem</span><span class="ubar__t"><i style="width:66%"></i></span></div>
+                  <div class="ubar"><span class="ubar__l">Eksik doğrulama</span><span class="ubar__t"><i style="width:42%"></i></span></div>
+                  <div class="ubar"><span class="ubar__l">Erken sonlandırma</span><span class="ubar__t"><i style="width:30%"></i></span></div>
+                </div>
+              </div>
+              <p class="scr__note">Bu ekran aracın kendi başarımını ölçer; izlenen sistemin sağlık istatistiğiyle karıştırılmamalıdır.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="fine fine--c">Ekranlar tasarım aşamasındaki arayüz taslağını yansıtır; sayısal değerler örnektir.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── TAKSONOMİ + KRİTERLER ───────────────────────── -->
+<section id="taxonomy" class="sec sec--alt">
+  <div class="wrap">
+    <div class="sechead reveal">
+      <p class="tag">//04 &nbsp;Kapsam</p>
+      <h2 class="h2">Neyi arıyoruz, neyi başarı sayıyoruz.</h2>
+      <p class="lede">AgentLens, MAST taksonomisinde tanımlı hata modlarını arar. Aşağıdaki dağılım, 1642 konuşma izinin analizinden elde edilen yaygınlık oranlarıdır.</p>
+    </div>
+
+    <div class="taxwrap">
+      <ul class="tax reveal">
+        <li><span class="tax__c">FM-1.3</span><span class="tax__n">Adım tekrarı</span><span class="tax__t"><i style="--w:15.7"></i></span><span class="tax__v">%15,7</span></li>
+        <li><span class="tax__c">FM-2.6</span><span class="tax__n">Akıl yürütme–eylem uyuşmazlığı</span><span class="tax__t"><i style="--w:13.2"></i></span><span class="tax__v">%13,2</span></li>
+        <li><span class="tax__c">FM-1.5</span><span class="tax__n">Sonlandırma koşullarından habersizlik</span><span class="tax__t"><i style="--w:12.4"></i></span><span class="tax__v">%12,4</span></li>
+        <li><span class="tax__c">FM-1.1</span><span class="tax__n">Görev tanımına uymama</span><span class="tax__t"><i style="--w:11.8"></i></span><span class="tax__v">%11,8</span></li>
+        <li><span class="tax__c">FM-3.3</span><span class="tax__n">Hatalı doğrulama</span><span class="tax__t"><i style="--w:9.1"></i></span><span class="tax__v">%9,1</span></li>
+        <li><span class="tax__c">FM-3.2</span><span class="tax__n">Eksik doğrulama</span><span class="tax__t"><i style="--w:8.2"></i></span><span class="tax__v">%8,2</span></li>
+        <li><span class="tax__c">FM-2.3</span><span class="tax__n">Görev sapması</span><span class="tax__t"><i style="--w:7.4"></i></span><span class="tax__v">%7,4</span></li>
+        <li><span class="tax__c">FM-2.2</span><span class="tax__n">Açıklama istememe</span><span class="tax__t"><i style="--w:6.8"></i></span><span class="tax__v">%6,8</span></li>
+        <li><span class="tax__c">FM-3.1</span><span class="tax__n">Erken sonlandırma</span><span class="tax__t"><i style="--w:6.2"></i></span><span class="tax__v">%6,2</span></li>
+        <li><span class="tax__c">FM-1.4</span><span class="tax__n">Konuşma geçmişi kaybı</span><span class="tax__t"><i style="--w:2.8"></i></span><span class="tax__v">%2,8</span></li>
+      </ul>
+      <p class="fine reveal">Kaynak: Cemri ve ark. (2025), MAST — Multi-Agent System Failure Taxonomy. Listede en yaygın on mod gösterilmiştir.</p>
+    </div>
+
+    <div class="crit">
+      <article class="crit__i reveal"><p class="crit__n">≥ 0,80</p><h3>F1-skoru</h3><p>MAST kümesinde iletişim ve koordinasyon uyuşmazlıklarını tespit başarımı.</p></article>
+      <article class="crit__i reveal"><p class="crit__n">≥ %75</p><h3>Sınıflandırma doğruluğu</h3><p>Tespit edilen uyuşmazlığın doğru hata kategorisine atanması.</p></article>
+      <article class="crit__i reveal"><p class="crit__n">≥ %90</p><h3>Açıklama tamlığı</h3><p>Raporun adımı, hata türünü ve nedeni eksiksiz içerdiği örnek oranı.</p></article>
+      <article class="crit__i reveal"><p class="crit__n">&lt; 10 sn</p><h3>Analiz süresi</h3><p>Bir konuşma oturumunun uçtan uca analiz ve raporlama süresi.</p></article>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── RAPORLAR ───────────────────────── -->
+<section id="reports" class="sec">
+  <div class="wrap">
+    <div class="sechead reveal">
+      <p class="tag">//05 &nbsp;Belgeler</p>
+      <h2 class="h2">Dönem boyunca üretilen raporlar.</h2>
+      <p class="lede">Her belge PDF ve DOCX olarak indirilebilir.</p>
+    </div>
+
+    <!-- TODO: her karttaki href="#" yerine Drive paylaşım bağlantısını yaz.
+         Drive'da dosyaya sağ tık → Paylaş → "Bağlantısı olan herkes" seçili olmalı. -->
+    <div class="docs">
+      <article class="doc reveal">
+        <p class="doc__n">01</p>
+        <div class="doc__b">
+          <h3>Project Proposal</h3>
+          <p>Problem tanımı, literatür incelemesi, çözüm yaklaşımı, çalışma planı ve başarı kriterleri.</p>
+          <p class="doc__d">21.06.2026</p>
+        </div>
+        <div class="doc__l">
+          <a href="#" class="dl">PDF</a>
+          <a href="#" class="dl">DOCX</a>
+        </div>
+      </article>
+
+      <article class="doc reveal">
+        <p class="doc__n">02</p>
+        <div class="doc__b">
+          <h3>Project Specifications Report</h3>
+          <p>Sistemin ne yapacağı: kapsam, kısıtlar, etik sorumluluklar ve numaralandırılmış gereksinim listesi.</p>
+          <p class="doc__d">28.06.2026</p>
+        </div>
+        <div class="doc__l">
+          <a href="#" class="dl">PDF</a>
+          <a href="#" class="dl">DOCX</a>
+        </div>
+      </article>
+
+      <article class="doc reveal">
+        <p class="doc__n">03</p>
+        <div class="doc__b">
+          <h3>Analysis Report</h3>
+          <p>Gereksinimlerin analiz modeline dönüşümü: kullanım senaryoları, nesne ve dinamik modeller.</p>
+          <p class="doc__d">Temmuz 2026</p>
+        </div>
+        <div class="doc__l">
+          <a href="#" class="dl">PDF</a>
+          <a href="#" class="dl">DOCX</a>
+        </div>
+      </article>
+
+      <article class="doc reveal">
+        <p class="doc__n">04</p>
+        <div class="doc__b">
+          <h3>High-Level Design Report</h3>
+          <p>Analiz modelinden tasarım modeline geçiş: alt sistem ayrışımı, dağıtım, kalıcı veri yönetimi ve güvenlik.</p>
+          <p class="doc__d">Temmuz 2026</p>
+        </div>
+        <div class="doc__l">
+          <a href="#" class="dl">PDF</a>
+          <a href="#" class="dl">DOCX</a>
+        </div>
+      </article>
+
+      <article class="doc reveal">
+        <p class="doc__n">05</p>
+        <div class="doc__b">
+          <h3>Proje Kısıt ve Etkiler Dokümanı (PKE-Plan)</h3>
+          <p>Uygulanan standartlar, proje kısıtları ve beklenen ekonomik, sosyal, çevresel, hukuki etkiler.</p>
+          <p class="doc__d">31.07.2026</p>
+        </div>
+        <div class="doc__l">
+          <a href="#" class="dl">PDF</a>
+          <a href="#" class="dl">DOCX</a>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── TAKIM ───────────────────────── -->
+<section id="team" class="sec sec--alt">
+  <div class="wrap">
+    <div class="sechead reveal">
+      <p class="tag">//06 &nbsp;Takım</p>
+      <h2 class="h2">Beş kişi, tek bir hat.</h2>
+      <p class="lede">TOBB Ekonomi ve Teknoloji Üniversitesi, Bilgisayar ve Yapay Zekâ Mühendisliği.</p>
+    </div>
+
+    <!--
+      TODO: Her üye için
+        · Fotoğraf → assets/team/ad.jpg olarak koy, aşağıdaki <img> satırının
+          yorumunu kaldır ve <span class="ava__i">…</span> satırını sil.
+        · Bio      → <p class="mem__bio"> içeriğini değiştir.
+        · LinkedIn → href="#" yerine profil bağlantısını yaz.
+    -->
+    <div class="team">
+      <article class="mem reveal">
+        <div class="ava">
+          <!-- <img src="assets/team/anil.jpg" alt="Anıl Özişler"> -->
+          <span class="ava__i">AÖ</span>
+        </div>
+        <h3 class="mem__n">Anıl Özişler</h3>
+        <p class="mem__r">Veri toplama hattı · Stage 1 anomali tespiti</p>
+        <p class="mem__bio">Kısa biyografi buraya gelecek: ilgi alanları, staj/çalışma deneyimi, projedeki katkısı.</p>
+        <a class="mem__in" href="#" target="_blank" rel="noopener">LinkedIn <span aria-hidden="true">→</span></a>
+      </article>
+
+      <article class="mem reveal">
+        <div class="ava">
+          <!-- <img src="assets/team/irem.jpg" alt="İrem Özdemir"> -->
+          <span class="ava__i">İÖ</span>
+        </div>
+        <h3 class="mem__n">İrem Özdemir</h3>
+        <p class="mem__r">Çok ajanlı test ortamı · Stage 1 model iyileştirme</p>
+        <p class="mem__bio">Kısa biyografi buraya gelecek: ilgi alanları, staj/çalışma deneyimi, projedeki katkısı.</p>
+        <a class="mem__in" href="#" target="_blank" rel="noopener">LinkedIn <span aria-hidden="true">→</span></a>
+      </article>
+
+      <article class="mem reveal">
+        <div class="ava">
+          <!-- <img src="assets/team/yigit.jpg" alt="Yiğit Yıldız"> -->
+          <span class="ava__i">YY</span>
+        </div>
+        <h3 class="mem__n">Yiğit Yıldız</h3>
+        <p class="mem__r">Veri şeması · Formatlama · Rapor üretimi</p>
+        <p class="mem__bio">Kısa biyografi buraya gelecek: ilgi alanları, staj/çalışma deneyimi, projedeki katkısı.</p>
+        <a class="mem__in" href="#" target="_blank" rel="noopener">LinkedIn <span aria-hidden="true">→</span></a>
+      </article>
+
+      <article class="mem reveal">
+        <div class="ava">
+          <!-- <img src="assets/team/arda.jpg" alt="Arda Günaydın"> -->
+          <span class="ava__i">AG</span>
+        </div>
+        <h3 class="mem__n">Arda Günaydın</h3>
+        <p class="mem__r">Data Collector · Stage 2 hata analizi</p>
+        <p class="mem__bio">Kısa biyografi buraya gelecek: ilgi alanları, staj/çalışma deneyimi, projedeki katkısı.</p>
+        <a class="mem__in" href="#" target="_blank" rel="noopener">LinkedIn <span aria-hidden="true">→</span></a>
+      </article>
+
+      <article class="mem reveal">
+        <div class="ava">
+          <!-- <img src="assets/team/yusuf.jpg" alt="Yusuf Mert Usta"> -->
+          <span class="ava__i">YU</span>
+        </div>
+        <h3 class="mem__n">Yusuf Mert Usta</h3>
+        <p class="mem__r">Retrieval ve MAST Store · Değerlendirme hattı</p>
+        <p class="mem__bio">Kısa biyografi buraya gelecek: ilgi alanları, staj/çalışma deneyimi, projedeki katkısı.</p>
+        <a class="mem__in" href="#" target="_blank" rel="noopener">LinkedIn <span aria-hidden="true">→</span></a>
+      </article>
+    </div>
+
+    <div class="advisor reveal">
+      <p class="tag">Danışman</p>
+      <p class="advisor__n">Shadi Bikas</p>
+      <p class="fine">TOBB Ekonomi ve Teknoloji Üniversitesi</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── İLETİŞİM ───────────────────────── -->
+<section id="contact" class="sec sec--end">
+  <div class="wrap">
+    <div class="cta reveal">
+      <p class="tag">//07 &nbsp;İletişim</p>
+      <h2 class="h2 h2--big">Projeyi konuşalım.</h2>
+      <p class="lede lede--c">Soru, geri bildirim ya da iş birliği için bize yazabilirsiniz.</p>
+      <div class="cta__row">
+        <!-- TODO: takım e-postasını yaz -->
+        <a class="btn" href="mailto:takim@ornek.com">takim@ornek.com</a>
+        <!-- TODO: depo herkese açıksa GitHub bağlantısını yaz, değilse bu satırı sil -->
+        <a class="btn btn--ghost" href="#" target="_blank" rel="noopener">GitHub deposu <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__in">
+    <div class="foot__b">
+      <span class="lens lens--sm" aria-hidden="true"></span>
+      <span>AgentLens</span>
+      <span class="fine">Çok ajanlı sistemler için hata merceği</span>
+    </div>
+    <nav class="foot__nav" aria-label="Alt gezinme">
+      <a href="#problem">Problem</a>
+      <a href="#how">Nasıl çalışır</a>
+      <a href="#demo">Demo</a>
+      <a href="#reports">Raporlar</a>
+      <a href="#team">Takım</a>
+      <a href="#contact">İletişim</a>
+    </nav>
+    <p class="fine">© 2026 AgentLens · TOBB ETÜ · BİL 495 — YAP 495 · 2025–2026 Yaz Dönemi</p>
+  </div>
+</footer>
+
+<script src="assets/main.js"></script>
+</body>
+</html>
